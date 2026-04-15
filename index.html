@@ -493,6 +493,27 @@
           </div>
         </div>
 
+        <div class="panel">
+          <h2>
+            <span>혼합통 유입량 추이</span>
+            <button class="btn-csv" id="downloadMixInputCsvBtn">CSV 다운로드</button>
+          </h2>
+          <div class="panel-body">
+            <div class="trend-tools">
+              <div class="trend-caption">
+                혼합통으로 들어간 정제유/신유 유입량을 시간축 기준으로 표시합니다. X축과 Y축 기준은 위 레벨 추이 그래프와 동일합니다.
+              </div>
+            </div>
+            <div class="trend-scroll" id="mixInputTrendScroll">
+              <canvas id="mixInputTrendCanvas" width="900" height="300"></canvas>
+            </div>
+            <div class="legend">
+              <div><span class="dot" style="background:#f59e0b"></span>혼합통 유입 정제유</div>
+              <div><span class="dot" style="background:#38bdf8"></span>혼합통 유입 신유</div>
+            </div>
+          </div>
+        </div>
+
         <div class="row-2">
           <div class="panel">
             <h2>이벤트 로그</h2>
@@ -1037,6 +1058,13 @@
         completedLogged: false
       });
 
+      state.mixInputHistory.push({
+        t: state.timeMin,
+        refinedIn: refinedOut,
+        freshIn: freshOut,
+        totalIn: total
+      });
+
       const mixLevel = getMixLevel();
       if (mixLevel > cfg.mixCapacity + EPS) {
         log(`혼합통 용량 초과: 현재 ${mixLevel.toFixed(1)}L / 용량 ${cfg.mixCapacity.toFixed(1)}L`, "danger");
@@ -1194,12 +1222,14 @@
       });
     }
 
-    function drawTrend() {
-      const scroll = $("trendScroll");
-      const canvas = $("trendCanvas");
+    function getCommonTrendMeta(scrollId, canvasId, extraMax = 0) {
+      const scroll = $(scrollId);
+      const canvas = $(canvasId);
       const ctx = canvas.getContext("2d");
       const baseWidth = Math.max(scroll.clientWidth - 2, 900);
-      const totalMinutes = state.history.length >= 2 ? (state.history[state.history.length - 1].t - state.history[0].t) : 0;
+      const historyStart = state.history.length ? state.history[0].t : 0;
+      const historyEnd = state.history.length ? state.history[state.history.length - 1].t : state.timeMin;
+      const totalMinutes = Math.max(0, historyEnd - historyStart);
       const dynamicWidth = Math.max(
         baseWidth,
         Math.ceil(baseWidth * (Math.max(totalMinutes, TREND_VISIBLE_WINDOW_MIN) / TREND_VISIBLE_WINDOW_MIN))
@@ -1214,18 +1244,20 @@
 
       const W = canvas.width;
       const H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#09111d";
-      ctx.fillRect(0, 0, W, H);
-
       const pad = { left: 58, right: 24, top: 18, bottom: 34 };
       const chartW = W - pad.left - pad.right;
       const chartH = H - pad.top - pad.bottom;
-
       const maxHistory = state.history.length ? Math.max(...state.history.map(d => Math.max(d.refined, d.fresh, d.mix))) : 0;
-      const rawMax = Math.max(cfg.refinedCapacity, cfg.freshCapacity, cfg.mixCapacity, cfg.transferTotalL, maxHistory, 10);
+      const rawMax = Math.max(cfg.refinedCapacity, cfg.freshCapacity, cfg.mixCapacity, cfg.transferTotalL, maxHistory, extraMax, 10);
       const maxY = ceilTo10(rawMax * 1.05);
+      const minT = historyStart;
+      const maxT = Math.max(minT + 1, historyEnd || state.timeMin || 1);
+      const xScale = (t) => pad.left + ((t - minT) / (maxT - minT)) * chartW;
+      const yScale = (v) => pad.top + chartH - (v / maxY) * chartH;
 
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#09111d";
+      ctx.fillRect(0, 0, W, H);
       ctx.strokeStyle = "rgba(148,163,184,.15)";
       ctx.lineWidth = 1;
       for (let yVal = 0; yVal <= maxY; yVal += 10) {
@@ -1243,12 +1275,35 @@
         ctx.fillText(String(yVal), 12, y);
       }
 
-      if (state.history.length >= 2) {
-        const minT = state.history[0].t;
-        const maxT = Math.max(minT + 1, state.history[state.history.length - 1].t);
-        const xScale = (t) => pad.left + ((t - minT) / (maxT - minT)) * chartW;
-        const yScale = (v) => pad.top + chartH - (v / maxY) * chartH;
+      return { scroll, canvas, ctx, W, H, pad, chartW, chartH, minT, maxT, maxY, xScale, yScale, nearRight };
+    }
 
+    function drawCommonXAxis(meta) {
+      const { ctx, chartW, minT, maxT, xScale, H } = meta;
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "11px sans-serif";
+      const marks = Math.max(5, Math.floor(chartW / 220));
+      for (let i = 0; i <= marks; i++) {
+        const t = minT + ((maxT - minT) / marks) * i;
+        const x = xScale(t);
+        const label = formatTime(t).replace("D+", "D");
+        ctx.fillText(label, x - 28, H - 10);
+      }
+    }
+
+    function keepTrendScrollRight(meta) {
+      if (meta.nearRight) {
+        requestAnimationFrame(() => {
+          meta.scroll.scrollLeft = meta.scroll.scrollWidth;
+        });
+      }
+    }
+
+    function drawTrend() {
+      const meta = getCommonTrendMeta("trendScroll", "trendCanvas", 0);
+      const { ctx, xScale, yScale } = meta;
+
+      if (state.history.length >= 2) {
         function drawLine(key, color) {
           ctx.beginPath();
           ctx.strokeStyle = color;
@@ -1265,23 +1320,44 @@
         drawLine("refined", "#f59e0b");
         drawLine("fresh", "#38bdf8");
         drawLine("mix", "#a78bfa");
-
-        ctx.fillStyle = "#94a3b8";
-        ctx.font = "11px sans-serif";
-        const marks = Math.max(5, Math.floor(chartW / 220));
-        for (let i = 0; i <= marks; i++) {
-          const t = minT + ((maxT - minT) / marks) * i;
-          const x = xScale(t);
-          const label = formatTime(t).replace("D+", "D");
-          ctx.fillText(label, x - 28, H - 10);
-        }
       }
 
-      if (nearRight) {
-        requestAnimationFrame(() => {
-          scroll.scrollLeft = scroll.scrollWidth;
+      drawCommonXAxis(meta);
+      keepTrendScrollRight(meta);
+    }
+
+    function drawMixInputTrend() {
+      const mixInputMax = state.mixInputHistory.length
+        ? Math.max(...state.mixInputHistory.map(d => Math.max(d.refinedIn, d.freshIn, d.totalIn)))
+        : 0;
+      const meta = getCommonTrendMeta("mixInputTrendScroll", "mixInputTrendCanvas", mixInputMax);
+      const { ctx, xScale, yScale, minT, maxT } = meta;
+
+      if (state.mixInputHistory.length) {
+        const range = Math.max(1, maxT - minT);
+        const barWidth = Math.max(8, Math.min(28, (meta.chartW / range) * Math.max(5, cfg.transferCycleH * 60 * 0.35)));
+
+        state.mixInputHistory.forEach(d => {
+          const xCenter = xScale(d.t);
+          const x = xCenter - barWidth / 2;
+          const refinedTop = yScale(d.refinedIn);
+          const refinedHeight = (meta.pad.top + meta.chartH) - refinedTop;
+          ctx.fillStyle = "rgba(245,158,11,0.85)";
+          ctx.fillRect(x, refinedTop, barWidth, Math.max(0, refinedHeight));
+
+          const freshTop = yScale(d.refinedIn + d.freshIn);
+          const freshHeight = refinedTop - freshTop;
+          ctx.fillStyle = "rgba(56,189,248,0.85)";
+          ctx.fillRect(x, freshTop, barWidth, Math.max(0, freshHeight));
+
+          ctx.strokeStyle = "rgba(255,255,255,0.18)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, freshTop, barWidth, Math.max(0, (meta.pad.top + meta.chartH) - freshTop));
         });
       }
+
+      drawCommonXAxis(meta);
+      keepTrendScrollRight(meta);
     }
 
     function downloadCsv() {
@@ -1304,6 +1380,32 @@
       const a = document.createElement("a");
       a.href = url;
       a.download = `process_trend_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadMixInputCsv() {
+      if (!state.mixInputHistory.length) {
+        alert("다운로드할 혼합통 유입량 데이터가 없습니다.");
+        return;
+      }
+      const rows = ["time_min,display_time,refined_in_l,fresh_in_l,total_in_l"];
+      for (const row of state.mixInputHistory) {
+        rows.push([
+          row.t,
+          `"${formatTime(row.t)}"`,
+          row.refinedIn.toFixed(3),
+          row.freshIn.toFixed(3),
+          row.totalIn.toFixed(3)
+        ].join(","));
+      }
+      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mix_input_trend_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1344,6 +1446,7 @@
       renderGrowthRuleTable();
       drawGrowthPreview();
       drawTrend();
+      drawMixInputTrend();
     }
 
     function pauseSimulation() {
@@ -1387,6 +1490,7 @@
         lastAppliedGrowthPct: 0,
         logs: [],
         history: [],
+        mixInputHistory: [],
         nextRefinedFill: cfg.refinedFillCycleH * 60,
         nextTransfer: cfg.transferCycleH * 60,
         lastEvent: "초기화 완료"
@@ -1420,6 +1524,7 @@
     });
     $("pauseBtn").addEventListener("click", pauseSimulation);
     $("downloadCsvBtn").addEventListener("click", downloadCsv);
+    $("downloadMixInputCsvBtn").addEventListener("click", downloadMixInputCsv);
     window.addEventListener("resize", () => render());
 
     resetSimulation();
