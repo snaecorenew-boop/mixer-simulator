@@ -271,6 +271,10 @@
               <input id="refinedFillCycleH" type="number" min="0.01" step="0.1" value="4">
             </div>
             <div class="field">
+              <label>정제유 보충 시간 (분)</label>
+              <input id="refinedFillDurationMin" type="number" min="0" step="1" value="60">
+            </div>
+            <div class="field">
               <label>신유 보충 시간 (분)</label>
               <input id="freshFillDurationMin" type="number" min="0" step="1" value="30">
             </div>
@@ -321,6 +325,18 @@
                 <option value="15">15분</option>
                 <option value="30">30분</option>
                 <option value="60">60분</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>배속</label>
+              <select id="playbackMultiplier">
+                <option value="2" selected>2배</option>
+                <option value="4">4배</option>
+                <option value="8">8배</option>
+                <option value="16">16배</option>
+                <option value="32">32배</option>
+                <option value="64">64배</option>
+                <option value="128">128배</option>
               </select>
             </div>
             <div class="field full">
@@ -392,7 +408,8 @@
               용량: <b id="refinedCapTxt">60.0 L</b><br>
               다음 충전: <b id="nextRefinedFillTxt">-</b><br>
               현재 주기: <b id="refinedCycleNowTxt">-</b><br>
-              다음 증가율: <b id="refinedNextGrowthTxt">-</b>
+              다음 증가율: <b id="refinedNextGrowthTxt">-</b><br>
+              보충 상태: <b id="refinedFillStatusTxt">대기</b>
             </div>
           </div>
 
@@ -502,6 +519,7 @@
     let timer = null;
     let batchSeq = 1;
     let freshFillSeq = 1;
+    let refinedFillSeq = 1;
     const RULE_PREVIEW_MAX_COUNT = 65;
     const TREND_VISIBLE_WINDOW_MIN = 48 * 60;
 
@@ -598,6 +616,7 @@
         refinedFillCycleH: Math.max(0.01, num($("refinedFillCycleH").value, 4)),
         refinedGrowthRulesText: $("refinedGrowthRules").value,
         refinedGrowthRules: parseGrowthRules($("refinedGrowthRules").value),
+        refinedFillDurationMin: Math.max(0, num($("refinedFillDurationMin").value, 60)),
         freshTargetL: Math.max(0, num($("freshTargetL").value, 50)),
         freshFillDurationMin: Math.max(0, num($("freshFillDurationMin").value, 30)),
         transferCycleH: Math.max(0.01, num($("transferCycleH").value, 8)),
@@ -608,7 +627,8 @@
         initFreshL: Math.max(0, num($("initFreshL").value, 50)),
         initMixL: Math.max(0, num($("initMixL").value, 0)),
         transferMode: $("transferMode").value,
-        speedStep: Math.max(1, parseInt($("speedStep").value, 10) || 5)
+        speedStep: Math.max(1, parseInt($("speedStep").value, 10) || 5),
+        playbackMultiplier: Math.max(2, parseInt($("playbackMultiplier").value, 10) || 2)
       };
     }
 
@@ -805,6 +825,100 @@
       if (state.history.length > 3000) state.history.shift();
     }
 
+    function applyRefinedFillInstant(amount, silent = false) {
+      const before = state.refined;
+      state.refined = Math.min(cfg.refinedCapacity, state.refined + amount);
+      const added = state.refined - before;
+      const lost = Math.max(0, amount - added);
+      if (!silent) {
+        if (added > EPS && lost > EPS) {
+          log(`정제유 보충 완료: +${added.toFixed(1)}L 반영, ${lost.toFixed(1)}L는 용량 제한으로 미반영`, "warn");
+        } else if (added > EPS) {
+          log(`정제유 보충 완료: +${added.toFixed(1)}L → ${state.refined.toFixed(1)}L`, "info");
+        } else {
+          log(`정제유 보충 시도: 보관함이 가득 차 있어 충전되지 않음`, "warn");
+        }
+      }
+      return { added, lost };
+    }
+
+    function startRefinedFillJob(silent = false) {
+      const amount = cfg.refinedFillAmount;
+      const duration = cfg.refinedFillDurationMin;
+      if (amount <= EPS) return;
+
+      if (duration <= EPS) {
+        applyRefinedFillInstant(amount, silent);
+        return;
+      }
+
+      state.refinedFillJobs.push({
+        id: refinedFillSeq++,
+        start: state.timeMin,
+        end: state.timeMin + duration,
+        totalAmount: amount,
+        remainingAmount: amount,
+        rate: amount / duration,
+        addedAmount: 0,
+        lostAmount: 0,
+        completedLogged: false
+      });
+
+      if (!silent) {
+        log(`정제유 보충 시작: ${amount.toFixed(1)}L를 ${duration.toFixed(0)}분 동안 보충`, "info");
+      }
+    }
+
+    function getRefinedFillStage() {
+      const jobs = state.refinedFillJobs || [];
+      if (!jobs.length) return { stage: "IDLE", detail: "진행 중인 정제유 보충 없음" };
+      const end = Math.min(...jobs.map(job => job.end));
+      const remain = Math.max(0, end - state.timeMin);
+      return {
+        stage: "FILLING",
+        detail: `보충 중 (${jobs.length}건, 가장 빠른 종료까지 ${formatRemain(remain)})`
+      };
+    }
+
+    function processRefinedFillBetween(startMin, endMin) {
+      const jobs = state.refinedFillJobs || [];
+      if (!jobs.length || endMin <= startMin) return;
+
+      for (const job of jobs) {
+        const activeStart = Math.max(startMin, job.start);
+        const activeEnd = Math.min(endMin, job.end);
+        if (activeEnd - activeStart <= EPS || job.remainingAmount <= EPS) continue;
+
+        const requested = Math.min(job.remainingAmount, job.rate * (activeEnd - activeStart));
+        const before = state.refined;
+        state.refined = Math.min(cfg.refinedCapacity, state.refined + requested);
+        const added = state.refined - before;
+        const lost = Math.max(0, requested - added);
+        job.remainingAmount -= requested;
+        job.addedAmount += added;
+        job.lostAmount += lost;
+        if (job.remainingAmount < EPS) job.remainingAmount = 0;
+      }
+
+      for (const job of jobs) {
+        if (!job.completedLogged && (endMin >= job.end - EPS || job.remainingAmount <= EPS)) {
+          job.completedLogged = true;
+          const t = state.timeMin;
+          state.timeMin = Math.min(endMin, job.end);
+          if (job.addedAmount > EPS && job.lostAmount > EPS) {
+            log(`정제유 보충 완료: +${job.addedAmount.toFixed(1)}L 반영, ${job.lostAmount.toFixed(1)}L는 용량 제한으로 미반영`, "warn");
+          } else if (job.addedAmount > EPS) {
+            log(`정제유 보충 완료: +${job.addedAmount.toFixed(1)}L → ${state.refined.toFixed(1)}L`, "info");
+          } else {
+            log(`정제유 보충 완료: 용량 제한으로 실제 반영량 없음`, "warn");
+          }
+          state.timeMin = t;
+        }
+      }
+
+      state.refinedFillJobs = jobs.filter(job => !job.completedLogged);
+    }
+
     function createFreshFillJob(silent = false) {
       const target = getFreshTargetLevel();
       if (state.fresh + EPS >= target) return;
@@ -868,18 +982,6 @@
         }
         state.freshFillJob = null;
         if (state.fresh + EPS < getFreshTargetLevel()) createFreshFillJob(true);
-      }
-    }
-
-    function fillRefined() {
-      const before = state.refined;
-      state.refined = Math.min(cfg.refinedCapacity, state.refined + cfg.refinedFillAmount);
-      const added = state.refined - before;
-      if (added > EPS) {
-        const capped = added + EPS < cfg.refinedFillAmount ? " (용량 제한 적용)" : "";
-        log(`정제유 충전: +${added.toFixed(1)}L → ${state.refined.toFixed(1)}L${capped}`, "info");
-      } else {
-        log(`정제유 충전 시도: 보관함이 가득 차 있어 충전되지 않음`, "warn");
       }
     }
 
@@ -980,6 +1082,7 @@
     }
 
     function processContinuousBetween(startMin, endMin) {
+      processRefinedFillBetween(startMin, endMin);
       processFreshFillBetween(startMin, endMin);
       drainBatchesBetween(startMin, endMin);
     }
@@ -989,6 +1092,9 @@
       if (state.nextRefinedFill > cursor + EPS && state.nextRefinedFill <= end + EPS) next = Math.min(next, state.nextRefinedFill);
       if (state.nextTransfer > cursor + EPS && state.nextTransfer <= end + EPS) next = Math.min(next, state.nextTransfer);
       if (state.freshFillJob && state.freshFillJob.end > cursor + EPS && state.freshFillJob.end <= end + EPS) next = Math.min(next, state.freshFillJob.end);
+      for (const job of (state.refinedFillJobs || [])) {
+        if (job.end > cursor + EPS && job.end <= end + EPS) next = Math.min(next, job.end);
+      }
       return next;
     }
 
@@ -1005,7 +1111,7 @@
         state.timeMin = nextEvent;
 
         if (Math.abs(state.nextRefinedFill - nextEvent) < 1e-6) {
-          fillRefined();
+          startRefinedFillJob();
           scheduleNextRefinedFillAfterEvent();
         }
 
@@ -1207,6 +1313,7 @@
     function render() {
       const mixLevel = getMixLevel();
       const mixStage = getMixStage();
+      const refinedFillStage = getRefinedFillStage();
       const freshFillStage = getFreshFillStage();
       const nextGrowthPct = getGrowthPercentForCount(state.refinedGrowthCount);
 
@@ -1227,6 +1334,9 @@
       $("nextTransferTxt").textContent = formatTime(state.nextTransfer);
       $("refinedCycleNowTxt").textContent = formatHours(state.currentRefinedIntervalH || cfg.refinedFillCycleH);
       $("refinedNextGrowthTxt").textContent = `${nextGrowthPct.toFixed(2)}% (카운트 ${state.refinedGrowthCount})`;
+      $("refinedFillStatusTxt").textContent = refinedFillStage.stage === "FILLING"
+        ? `보충 중 / ${state.refinedFillJobs.length}건 진행`
+        : "대기";
       $("freshFillStatusTxt").textContent = state.freshFillJob ? `보충 중 / 종료 ${formatTime(state.freshFillJob.end)}` : "대기";
 
       renderLogs();
@@ -1245,9 +1355,13 @@
 
     function startSimulation() {
       pauseSimulation();
-      cfg.speedStep = Math.max(1, parseInt($("speedStep").value, 10) || cfg.speedStep || 5);
       timer = setInterval(() => {
-        for (let i = 0; i < cfg.speedStep; i++) stepOneMinute();
+        const stepMinutes = Math.max(1, parseInt($("speedStep").value, 10) || cfg.speedStep || 5);
+        const playbackMultiplier = Math.max(2, parseInt($("playbackMultiplier").value, 10) || cfg.playbackMultiplier || 2);
+        cfg.speedStep = stepMinutes;
+        cfg.playbackMultiplier = playbackMultiplier;
+        const totalSteps = stepMinutes * playbackMultiplier;
+        for (let i = 0; i < totalSteps; i++) stepOneMinute();
         render();
       }, 200);
     }
@@ -1267,6 +1381,7 @@
         fresh: initFresh,
         mixBatches: [],
         freshFillJob: null,
+        refinedFillJobs: [],
         refinedGrowthCount: 0,
         currentRefinedIntervalH: cfg.refinedFillCycleH,
         lastAppliedGrowthPct: 0,
