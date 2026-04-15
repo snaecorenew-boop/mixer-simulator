@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>공정 시뮬레이터 v3</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --panel:#111827;
+      --line:#334155;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --refined:#f59e0b;
+      --fresh:#38bdf8;
+      --mix:#a78bfa;
+      --danger:#ef4444;
+      --warning:#facc15;
+      --success:#22c55e;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+      background:linear-gradient(180deg,#020617,#0f172a);
+      color:var(--text);
+    }
+    .wrap{max-width:1460px;margin:0 auto;padding:20px;}
+    h1{margin:0 0 8px;font-size:28px;font-weight:800;}
+    .sub{color:var(--muted);margin-bottom:18px;line-height:1.6;}
+    .grid{display:grid;grid-template-columns:430px 1fr;gap:18px;}
+    .panel{
+      background:rgba(17,24,39,.92);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:0 12px 40px rgba(0,0,0,.25);
+      overflow:hidden;
+    }
+    .panel h2{
+      margin:0;
+      font-size:18px;
+      padding:16px 18px;
+      border-bottom:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .panel-body{padding:16px 18px;}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .field{display:flex;flex-direction:column;gap:6px;}
+    .field.full{grid-column:1 / -1;}
+    .field label{font-size:13px;color:var(--muted);}
+    .field input,.field select,.field textarea{
+      width:100%;
+      padding:10px 12px;
+      background:#0b1220;
+      color:var(--text);
+      border:1px solid var(--line);
+      border-radius:10px;
+      outline:none;
+      font:inherit;
+    }
+    .field textarea{min-height:92px;resize:vertical;line-height:1.5;}
+    .field input:focus,.field select:focus,.field textarea:focus{
+      border-color:#60a5fa;
+      box-shadow:0 0 0 3px rgba(96,165,250,.15);
+    }
+    .hint{font-size:12px;color:var(--muted);line-height:1.5;}
+    .btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;}
+    button{
+      border:none;
+      border-radius:12px;
+      padding:11px 14px;
+      color:white;
+      font-weight:700;
+      cursor:pointer;
+      background:#334155;
+    }
+    button:hover{filter:brightness(1.08);}
+    .btn-green{background:#16a34a;}
+    .btn-blue{background:#2563eb;}
+    .btn-yellow{background:#d97706;}
+    .btn-red{background:#dc2626;}
+    .btn-gray{background:#475569;}
+    .btn-csv{background:#0f766e;}
+    .right-col{display:grid;gap:18px;grid-template-rows:auto auto auto 1fr;}
+    .top-status{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+    .stat{
+      background:rgba(17,24,39,.92);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:16px;
+    }
+    .stat .label{font-size:12px;color:var(--muted);margin-bottom:8px;}
+    .stat .value{font-size:22px;font-weight:800;letter-spacing:.4px;}
+    .stat small{color:var(--muted);display:block;margin-top:6px;line-height:1.5;}
+    .tanks{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    .tank-card{
+      background:rgba(17,24,39,.92);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px;
+    }
+    .tank-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-weight:800;}
+    .tank-title span:last-child{color:var(--muted);font-size:13px;font-weight:600;}
+    .tank-shell{
+      position:relative;
+      height:260px;
+      border:3px solid #64748b;
+      border-radius:18px 18px 26px 26px;
+      overflow:hidden;
+      background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02)), #0b1220;
+      box-shadow: inset 0 0 20px rgba(0,0,0,.25);
+    }
+    .liquid{
+      position:absolute;
+      left:0;right:0;bottom:0;
+      height:0%;
+      transition:height .2s linear;
+      display:flex;
+      align-items:flex-start;
+      justify-content:center;
+      color:white;
+      font-weight:800;
+      padding-top:10px;
+      text-shadow:0 1px 2px rgba(0,0,0,.4);
+    }
+    .liquid::before{
+      content:"";
+      position:absolute;
+      top:-12px;left:-10%;width:120%;height:24px;
+      background:rgba(255,255,255,.18);
+      filter:blur(1px);
+      border-radius:50%;
+    }
+    .tank-info{margin-top:12px;font-size:14px;line-height:1.7;color:#dbeafe;}
+    .tank-info b{color:white;}
+    .row-2{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;}
+    .log-box{
+      max-height:360px;
+      overflow:auto;
+      background:#09111d;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px;
+    }
+    .log-item{padding:9px 10px;border-bottom:1px dashed rgba(148,163,184,.18);font-size:13px;line-height:1.5;}
+    .log-item:last-child{border-bottom:none;}
+    .log-time{color:#93c5fd;font-weight:700;margin-right:8px;}
+    .log-info{color:#e5e7eb;}
+    .log-warn{color:#fde68a;}
+    .log-danger{color:#fca5a5;}
+    .batch-list{display:flex;flex-direction:column;gap:10px;}
+    .batch{background:#09111d;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:13px;line-height:1.6;}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:6px;}
+    .idle{background:#334155;color:white;}
+    .waiting{background:#854d0e;color:white;}
+    .draining{background:#4338ca;color:white;}
+    .filling{background:#0369a1;color:white;}
+    .done{background:#166534;color:white;}
+    .trend-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+    .trend-caption{font-size:13px;color:var(--muted);line-height:1.5;}
+    .trend-scroll{
+      width:100%;
+      overflow-x:auto;
+      overflow-y:hidden;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#09111d;
+    }
+    .trend-scroll canvas{
+      display:block;
+      height:300px;
+      background:#09111d;
+    }
+    .preview-caption{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;}
+    .preview-canvas-wrap{
+      width:100%;
+      overflow-x:auto;
+      overflow-y:hidden;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#09111d;
+      margin-bottom:12px;
+    }
+    .preview-canvas-wrap canvas{
+      display:block;
+      width:100%;
+      min-width:920px;
+      height:280px;
+      background:#09111d;
+    }
+    .rule-table-wrap{
+      border:1px solid var(--line);
+      border-radius:14px;
+      overflow:hidden;
+      background:#09111d;
+    }
+    .rule-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    .rule-table th,.rule-table td{
+      padding:10px 12px;
+      border-bottom:1px solid rgba(148,163,184,.15);
+      text-align:left;
+      vertical-align:top;
+    }
+    .rule-table th{
+      background:rgba(255,255,255,.03);
+      color:#cbd5e1;
+      font-weight:700;
+    }
+    .rule-table td{color:#e5e7eb;}
+    .rule-table tbody tr:last-child td{border-bottom:none;}
+    .legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;color:var(--muted);font-size:13px;}
+    .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;}
+    .note{
+      margin-top:10px;
+      padding:12px 14px;
+      background:rgba(59,130,246,.08);
+      border:1px solid rgba(59,130,246,.25);
+      color:#cbd5e1;
+      border-radius:12px;
+      font-size:13px;
+      line-height:1.6;
+    }
+    .footer-note{margin-top:16px;font-size:12px;color:var(--muted);line-height:1.6;}
+    @media (max-width:1100px){
+      .grid{grid-template-columns:1fr;}
+      .top-status{grid-template-columns:1fr 1fr;}
+      .tanks{grid-template-columns:1fr;}
+      .row-2{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>공정 시뮬레이터</h1>
+    <div class="sub">
+      정제유/신유 보관함과 혼합통 공정을 시간 기반으로 시뮬레이션합니다. 이번 버전은 <b>정제유 증가 규칙 미리보기 차트/표</b>와,
+      <b>한 화면에서 약 2일 분량을 볼 수 있는 레벨 추이 그래프</b>, <b>CSV 다운로드</b>를 반영했습니다.
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>설정</h2>
+        <div class="panel-body">
+          <div class="form-grid">
+            <div class="field">
+              <label>정제유 보관함 용량 (L)</label>
+              <input id="refinedCapacity" type="number" min="0" step="1" value="60">
+            </div>
+            <div class="field">
+              <label>신유 보관함 용량 (L)</label>
+              <input id="freshCapacity" type="number" min="0" step="1" value="80">
+            </div>
+            <div class="field">
+              <label>혼합통 용량 (L)</label>
+              <input id="mixCapacity" type="number" min="0" step="1" value="60">
+            </div>
+            <div class="field">
+              <label>정제유 1회 충전량 (L)</label>
+              <input id="refinedFillAmount" type="number" min="0" step="1" value="20">
+            </div>
+            <div class="field">
+              <label>정제유 시작 충전 주기 (시간)</label>
+              <input id="refinedFillCycleH" type="number" min="0.01" step="0.1" value="4">
+            </div>
+            <div class="field">
+              <label>신유 보충 시간 (분)</label>
+              <input id="freshFillDurationMin" type="number" min="0" step="1" value="30">
+            </div>
+            <div class="field">
+              <label>신유 유지 목표량 (L)</label>
+              <input id="freshTargetL" type="number" min="0" step="1" value="50">
+            </div>
+            <div class="field">
+              <label>혼합통 이송 주기 (시간)</label>
+              <input id="transferCycleH" type="number" min="0.01" step="0.1" value="8">
+            </div>
+            <div class="field">
+              <label>혼합 기준 총량 (L)</label>
+              <input id="transferTotalL" type="number" min="0" step="1" value="50">
+            </div>
+            <div class="field">
+              <label>혼합통 대기 시간 (시간)</label>
+              <input id="mixWaitH" type="number" min="0" step="0.1" value="2">
+            </div>
+            <div class="field">
+              <label>혼합통 배출 시간 (시간)</label>
+              <input id="mixDrainH" type="number" min="0.01" step="0.1" value="5">
+            </div>
+            <div class="field">
+              <label>정제유 초기량 (L)</label>
+              <input id="initRefinedL" type="number" min="0" step="1" value="0">
+            </div>
+            <div class="field">
+              <label>신유 초기량 (L)</label>
+              <input id="initFreshL" type="number" min="0" step="1" value="50">
+            </div>
+            <div class="field">
+              <label>혼합통 초기량 (L)</label>
+              <input id="initMixL" type="number" min="0" step="1" value="0">
+            </div>
+            <div class="field">
+              <label>이송 규칙</label>
+              <select id="transferMode">
+                <option value="fixed50" selected>총합 50L 우선</option>
+                <option value="refinedAll">정제유 전량 배출 우선</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>시뮬레이션 속도 (틱당 분)</label>
+              <select id="speedStep">
+                <option value="1">1분</option>
+                <option value="5" selected>5분</option>
+                <option value="15">15분</option>
+                <option value="30">30분</option>
+                <option value="60">60분</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label>정제유 충전 주기 증가 규칙 (%)</label>
+              <textarea id="refinedGrowthRules">0-:0.88</textarea>
+              <div class="hint">
+                입력 형식: <b>시작카운트-끝카운트:증가율</b> 또는 <b>시작카운트-:증가율</b><br>
+                예시 1) <b>0-:0.88</b> → 모든 카운트에 0.88% 적용<br>
+                예시 2) <b>0-29:0.88</b> 줄바꿈 <b>30-:4</b> → 0~29카운트는 0.88%, 30카운트 이상은 4% 적용<br>
+                카운트는 "주기 증가가 적용된 횟수" 기준입니다. 시작값은 0으로 계산합니다.
+              </div>
+            </div>
+          </div>
+
+          <div class="btns">
+            <button class="btn-blue" id="applyBtn">설정 적용 + 초기화</button>
+            <button class="btn-green" id="startBtn">시작</button>
+            <button class="btn-yellow" id="pauseBtn">일시정지</button>
+            <button class="btn-red" id="resetBtn">리셋</button>
+          </div>
+
+          <div class="note">
+            <b>주기 증가식 설명</b><br>
+            시작 충전 주기가 예를 들어 4시간이고, 카운트 0 규칙이 0.88%이면 다음 주기는 <b>4 × 1.0088</b> 시간입니다.<br>
+            그 다음 주기는 다음 카운트에 맞는 증가율을 다시 적용합니다. 즉, <b>직전 주기 기준 복리 형태</b>로 커집니다.
+          </div>
+
+          <div class="footer-note">
+            레벨 추이 그래프는 한 화면에 약 48시간(2일) 분량을 보여주도록 조정되어 있으며, 그 이후 구간은 하단 스크롤로 탐색할 수 있습니다.
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="top-status">
+          <div class="stat">
+            <div class="label">현재 시뮬레이션 시간</div>
+            <div class="value" id="timeNow">D+0 00:00</div>
+            <small>가상 공정 시간</small>
+          </div>
+          <div class="stat">
+            <div class="label">혼합통 상태</div>
+            <div class="value" id="mixStage">IDLE</div>
+            <small id="mixStageDetail">대기 중 배치 없음</small>
+          </div>
+          <div class="stat">
+            <div class="label">신유 보충 상태</div>
+            <div class="value" id="freshFillStage">IDLE</div>
+            <small id="freshFillDetail">진행 중인 보충 없음</small>
+          </div>
+          <div class="stat">
+            <div class="label">최근 이벤트</div>
+            <div class="value" id="lastEvent">초기화</div>
+            <small>가장 최근 로그 요약</small>
+          </div>
+        </div>
+
+        <div class="tanks">
+          <div class="tank-card">
+            <div class="tank-title">
+              <span>정제유 보관함</span>
+              <span id="refinedPercent">0%</span>
+            </div>
+            <div class="tank-shell">
+              <div class="liquid" id="refinedLiquid" style="background:linear-gradient(180deg,#fbbf24,#d97706);"></div>
+            </div>
+            <div class="tank-info">
+              현재량: <b id="refinedValue">0.0 L</b><br>
+              용량: <b id="refinedCapTxt">60.0 L</b><br>
+              다음 충전: <b id="nextRefinedFillTxt">-</b><br>
+              현재 주기: <b id="refinedCycleNowTxt">-</b><br>
+              다음 증가율: <b id="refinedNextGrowthTxt">-</b>
+            </div>
+          </div>
+
+          <div class="tank-card">
+            <div class="tank-title">
+              <span>신유 보관함</span>
+              <span id="freshPercent">0%</span>
+            </div>
+            <div class="tank-shell">
+              <div class="liquid" id="freshLiquid" style="background:linear-gradient(180deg,#7dd3fc,#0284c7);"></div>
+            </div>
+            <div class="tank-info">
+              현재량: <b id="freshValue">0.0 L</b><br>
+              용량: <b id="freshCapTxt">80.0 L</b><br>
+              유지 목표: <b id="freshTargetTxt">50.0 L</b><br>
+              보충 상태: <b id="freshFillStatusTxt">대기</b>
+            </div>
+          </div>
+
+          <div class="tank-card">
+            <div class="tank-title">
+              <span>혼합통</span>
+              <span id="mixPercent">0%</span>
+            </div>
+            <div class="tank-shell">
+              <div class="liquid" id="mixLiquid" style="background:linear-gradient(180deg,#c4b5fd,#7c3aed);"></div>
+            </div>
+            <div class="tank-info">
+              현재량: <b id="mixValue">0.0 L</b><br>
+              용량: <b id="mixCapTxt">60.0 L</b><br>
+              다음 이송: <b id="nextTransferTxt">-</b><br>
+              활성 배치 수: <b id="activeBatchCount">0</b>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>정제유 주기 증가 규칙 미리보기</h2>
+          <div class="panel-body">
+            <div class="preview-caption">
+              X축은 카운트(0~65), Y축은 정제유 충전 간격(시간)입니다. 입력한 증가율 규칙이 실제 주기 변화에 어떻게 반영되는지 확인할 수 있습니다.
+            </div>
+            <div class="preview-canvas-wrap">
+              <canvas id="rulePreviewCanvas" width="920" height="280"></canvas>
+            </div>
+            <div class="rule-table-wrap">
+              <table class="rule-table">
+                <thead>
+                  <tr>
+                    <th>번호</th>
+                    <th>적용 카운트 범위</th>
+                    <th>증가율</th>
+                    <th>범위 시작 시 예상 주기(시간)</th>
+                  </tr>
+                </thead>
+                <tbody id="growthRuleTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>
+            <span>레벨 추이</span>
+            <button class="btn-csv" id="downloadCsvBtn">CSV 다운로드</button>
+          </h2>
+          <div class="panel-body">
+            <div class="trend-tools">
+              <div class="trend-caption">
+                Y축은 10L 단위이며, 한 화면에 약 2일(48시간) 분량이 보이도록 X축 폭을 조정했습니다. 더 긴 이력은 하단 가로 스크롤로 탐색할 수 있습니다.
+              </div>
+            </div>
+            <div class="trend-scroll" id="trendScroll">
+              <canvas id="trendCanvas" width="900" height="300"></canvas>
+            </div>
+            <div class="legend">
+              <div><span class="dot" style="background:#f59e0b"></span>정제유</div>
+              <div><span class="dot" style="background:#38bdf8"></span>신유</div>
+              <div><span class="dot" style="background:#a78bfa"></span>혼합통</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div class="panel">
+            <h2>이벤트 로그</h2>
+            <div class="panel-body">
+              <div class="log-box" id="logBox"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>혼합 배치 현황</h2>
+            <div class="panel-body">
+              <div class="batch-list" id="batchList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const EPS = 1e-9;
+    let cfg = {};
+    let state = {};
+    let timer = null;
+    let batchSeq = 1;
+    let freshFillSeq = 1;
+    const RULE_PREVIEW_MAX_COUNT = 65;
+    const TREND_VISIBLE_WINDOW_MIN = 48 * 60;
+
+    function num(v, fallback = 0) {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function ceilTo10(v) {
+      return Math.max(10, Math.ceil(v / 10) * 10);
+    }
+
+    function formatTime(mins) {
+      const total = Math.max(0, Math.floor(mins));
+      const d = Math.floor(total / (24 * 60));
+      const h = Math.floor((total % (24 * 60)) / 60);
+      const m = total % 60;
+      return `D+${d} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+
+    function formatRemain(mins) {
+      const m = Math.max(0, Math.round(mins));
+      const h = Math.floor(m / 60);
+      const mm = m % 60;
+      return `${h}시간 ${mm}분`;
+    }
+
+    function formatHours(hours) {
+      return `${hours.toFixed(3)}시간`;
+    }
+
+    function log(message, type = "info") {
+      const item = { time: state.timeMin ?? 0, message, type };
+      state.logs.unshift(item);
+      if (state.logs.length > 300) state.logs.pop();
+      state.lastEvent = message;
+    }
+
+    function parseGrowthRules(text) {
+      const lines = String(text || "")
+        .split(/\n|,/)
+        .map(v => v.trim())
+        .filter(Boolean);
+
+      const rules = [];
+      for (const line of lines) {
+        const [rangePart, pctPart] = line.split(":").map(v => v && v.trim());
+        if (!rangePart || !pctPart) continue;
+        const percent = num(String(pctPart).replace("%", ""), NaN);
+        if (!Number.isFinite(percent) || percent < 0) continue;
+
+        let start = 0;
+        let end = null;
+        const normalizedRange = rangePart.replace(/\s/g, "");
+        const sep = normalizedRange.includes("~") ? "~" : (normalizedRange.includes("-") ? "-" : null);
+
+        if (!sep) {
+          start = parseInt(normalizedRange, 10);
+          if (!Number.isFinite(start) || start < 0) continue;
+          end = null;
+        } else {
+          const parts = normalizedRange.split(sep);
+          if (parts.length !== 2) continue;
+          start = parseInt(parts[0], 10);
+          if (!Number.isFinite(start) || start < 0) continue;
+          if (parts[1] === "") {
+            end = null;
+          } else {
+            end = parseInt(parts[1], 10);
+            if (!Number.isFinite(end) || end < start) continue;
+          }
+        }
+        rules.push({ start, end, percent });
+      }
+
+      if (!rules.length) {
+        return [{ start: 0, end: null, percent: 0.88 }];
+      }
+
+      rules.sort((a, b) => a.start - b.start || ((a.end ?? Number.MAX_SAFE_INTEGER) - (b.end ?? Number.MAX_SAFE_INTEGER)));
+      return rules;
+    }
+
+    function readConfig() {
+      return {
+        refinedCapacity: Math.max(0, num($("refinedCapacity").value, 60)),
+        freshCapacity: Math.max(0, num($("freshCapacity").value, 80)),
+        mixCapacity: Math.max(0, num($("mixCapacity").value, 60)),
+        refinedFillAmount: Math.max(0, num($("refinedFillAmount").value, 20)),
+        refinedFillCycleH: Math.max(0.01, num($("refinedFillCycleH").value, 4)),
+        refinedGrowthRulesText: $("refinedGrowthRules").value,
+        refinedGrowthRules: parseGrowthRules($("refinedGrowthRules").value),
+        freshTargetL: Math.max(0, num($("freshTargetL").value, 50)),
+        freshFillDurationMin: Math.max(0, num($("freshFillDurationMin").value, 30)),
+        transferCycleH: Math.max(0.01, num($("transferCycleH").value, 8)),
+        transferTotalL: Math.max(0, num($("transferTotalL").value, 50)),
+        mixWaitH: Math.max(0, num($("mixWaitH").value, 2)),
+        mixDrainH: Math.max(0.01, num($("mixDrainH").value, 5)),
+        initRefinedL: Math.max(0, num($("initRefinedL").value, 0)),
+        initFreshL: Math.max(0, num($("initFreshL").value, 50)),
+        initMixL: Math.max(0, num($("initMixL").value, 0)),
+        transferMode: $("transferMode").value,
+        speedStep: Math.max(1, parseInt($("speedStep").value, 10) || 5)
+      };
+    }
+
+    function getFreshTargetLevel() {
+      return Math.min(cfg.freshTargetL, cfg.freshCapacity);
+    }
+
+    function getMixLevel() {
+      return state.mixBatches.reduce((sum, b) => sum + Math.max(0, b.remaining), 0);
+    }
+
+    function getGrowthPercentForCount(count) {
+      let selected = null;
+      for (const rule of cfg.refinedGrowthRules) {
+        const inRange = count >= rule.start && (rule.end == null || count <= rule.end);
+        if (inRange) selected = rule;
+      }
+      if (selected) return selected.percent;
+
+      const candidates = cfg.refinedGrowthRules.filter(rule => count >= rule.start);
+      if (candidates.length) {
+        candidates.sort((a, b) => a.start - b.start);
+        return candidates[candidates.length - 1].percent;
+      }
+      return cfg.refinedGrowthRules[0]?.percent ?? 0.88;
+    }
+
+    function formatGrowthRuleRange(rule) {
+      return rule.end == null ? `${rule.start} 이상` : `${rule.start}~${rule.end}`;
+    }
+
+    function buildGrowthPreviewSeries(maxCount = RULE_PREVIEW_MAX_COUNT) {
+      const series = [{ count: 0, interval: cfg.refinedFillCycleH, growthPct: null }];
+      let interval = cfg.refinedFillCycleH;
+      for (let count = 0; count < maxCount; count++) {
+        const pct = getGrowthPercentForCount(count);
+        interval = interval * (1 + pct / 100);
+        series.push({ count: count + 1, interval, growthPct: pct });
+      }
+      return series;
+    }
+
+    function niceStep(maxValue, targetTicks = 6) {
+      const rough = Math.max(maxValue / targetTicks, 0.0001);
+      const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+      const candidates = [1, 2, 5, 10];
+      for (const c of candidates) {
+        if (rough <= pow * c) return pow * c;
+      }
+      return pow * 10;
+    }
+
+    function renderGrowthRuleTable() {
+      const tbody = $("growthRuleTableBody");
+      if (!tbody) return;
+      const series = buildGrowthPreviewSeries();
+      tbody.innerHTML = "";
+      cfg.refinedGrowthRules.forEach((rule, index) => {
+        const previewCount = Math.min(RULE_PREVIEW_MAX_COUNT, Math.max(0, rule.start));
+        const sample = series.find(item => item.count === previewCount) || series[series.length - 1];
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${index + 1}</td>
+          <td>${formatGrowthRuleRange(rule)}</td>
+          <td>${rule.percent.toFixed(2)}%</td>
+          <td>${sample.interval.toFixed(3)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawGrowthPreview() {
+      const canvas = $("rulePreviewCanvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width;
+      const H = canvas.height;
+      const series = buildGrowthPreviewSeries();
+      const maxX = RULE_PREVIEW_MAX_COUNT;
+      const maxInterval = Math.max(...series.map(item => item.interval), cfg.refinedFillCycleH, 1);
+      const stepY = niceStep(maxInterval, 6);
+      const maxY = Math.ceil(maxInterval / stepY) * stepY;
+      const pad = { left: 62, right: 20, top: 20, bottom: 38 };
+      const chartW = W - pad.left - pad.right;
+      const chartH = H - pad.top - pad.bottom;
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#09111d";
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.strokeStyle = "rgba(148,163,184,.15)";
+      ctx.lineWidth = 1;
+      for (let yVal = 0; yVal <= maxY + EPS; yVal += stepY) {
+        const y = pad.top + chartH - (yVal / maxY) * chartH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+      }
+
+      for (let xVal = 0; xVal <= maxX; xVal += 5) {
+        const x = pad.left + (xVal / maxX) * chartW;
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, H - pad.bottom);
+        ctx.stroke();
+      }
+
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      for (const rule of cfg.refinedGrowthRules) {
+        if (rule.start > 0 && rule.start <= maxX) {
+          const x = pad.left + (rule.start / maxX) * chartW;
+          ctx.strokeStyle = "rgba(250,204,21,.65)";
+          ctx.beginPath();
+          ctx.moveTo(x, pad.top);
+          ctx.lineTo(x, H - pad.bottom);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px sans-serif";
+      for (let yVal = 0; yVal <= maxY + EPS; yVal += stepY) {
+        const y = pad.top + chartH - (yVal / maxY) * chartH + 4;
+        ctx.fillText(String(Number(yVal.toFixed(3))), 12, y);
+      }
+
+      for (let xVal = 0; xVal <= maxX; xVal += 5) {
+        const x = pad.left + (xVal / maxX) * chartW;
+        ctx.fillText(String(xVal), x - 8, H - 12);
+      }
+
+      const xScale = (count) => pad.left + (count / maxX) * chartW;
+      const yScale = (interval) => pad.top + chartH - (interval / maxY) * chartH;
+
+      ctx.beginPath();
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 2.5;
+      series.forEach((item, index) => {
+        const x = xScale(item.count);
+        const y = yScale(item.interval);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "#fbbf24";
+      series.forEach(item => {
+        const x = xScale(item.count);
+        const y = yScale(item.interval);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Y축: 정제유 충전 간격(시간)", pad.left, 14);
+      ctx.fillText("X축: 카운트", W - 86, H - 12);
+    }
+
+    function getMixStage() {
+      if (!state.mixBatches.length) return { stage: "IDLE", detail: "대기 중 배치 없음" };
+      const now = state.timeMin;
+      const draining = state.mixBatches.filter(b => now >= b.drainStart && now < b.drainEnd && b.remaining > EPS);
+      if (draining.length) {
+        const next = draining[0];
+        return { stage: "DRAINING", detail: `배치 #${next.id} 배출 중 (${formatRemain(next.drainEnd - now)} 남음)` };
+      }
+      const waiting = state.mixBatches.filter(b => now < b.drainStart && b.remaining > EPS);
+      if (waiting.length) {
+        const next = waiting[0];
+        return { stage: "WAITING", detail: `배치 #${next.id} 대기 중 (${formatRemain(next.drainStart - now)} 후 배출 시작)` };
+      }
+      return { stage: "IDLE", detail: "활성 배치 없음" };
+    }
+
+    function getFreshFillStage() {
+      const job = state.freshFillJob;
+      if (!job) return { stage: "IDLE", detail: "진행 중인 보충 없음" };
+      const remain = Math.max(0, job.end - state.timeMin);
+      return { stage: "FILLING", detail: `보충 중 (${formatRemain(remain)} 남음, 잔여 ${job.remainingAmount.toFixed(1)}L)` };
+    }
+
+    function pushHistory() {
+      state.history.push({
+        t: state.timeMin,
+        refined: state.refined,
+        fresh: state.fresh,
+        mix: getMixLevel()
+      });
+      if (state.history.length > 3000) state.history.shift();
+    }
+
+    function createFreshFillJob(silent = false) {
+      const target = getFreshTargetLevel();
+      if (state.fresh + EPS >= target) return;
+      if (state.freshFillJob) return;
+
+      const need = target - state.fresh;
+      const duration = cfg.freshFillDurationMin;
+      if (duration <= EPS) {
+        state.fresh = target;
+        if (!silent) log(`신유 즉시 보충: +${need.toFixed(1)}L → ${state.fresh.toFixed(1)}L`, "info");
+        return;
+      }
+
+      state.freshFillJob = {
+        id: freshFillSeq++,
+        start: state.timeMin,
+        end: state.timeMin + duration,
+        targetLevel: target,
+        remainingAmount: need,
+        rate: need / duration,
+        completedLogged: false
+      };
+
+      if (!silent) log(`신유 보충 시작: ${need.toFixed(1)}L를 ${duration.toFixed(0)}분 동안 보충`, "info");
+    }
+
+    function rebalanceFreshFillJob() {
+      const job = state.freshFillJob;
+      if (!job) return;
+      const now = state.timeMin;
+      const target = getFreshTargetLevel();
+      const remainingDuration = Math.max(EPS, job.end - now);
+      const need = Math.max(0, target - state.fresh);
+      job.targetLevel = target;
+      job.remainingAmount = need;
+      job.rate = need / remainingDuration;
+      if (need <= EPS) state.freshFillJob = null;
+    }
+
+    function processFreshFillBetween(startMin, endMin) {
+      const job = state.freshFillJob;
+      if (!job || endMin <= startMin) return;
+
+      const activeStart = Math.max(startMin, job.start);
+      const activeEnd = Math.min(endMin, job.end);
+      if (activeEnd - activeStart > EPS && job.remainingAmount > EPS) {
+        const amount = Math.min(job.remainingAmount, job.rate * (activeEnd - activeStart));
+        state.fresh = Math.min(cfg.freshCapacity, state.fresh + amount);
+        job.remainingAmount -= amount;
+        if (job.remainingAmount < EPS) job.remainingAmount = 0;
+      }
+
+      if (endMin >= job.end - EPS || job.remainingAmount <= EPS) {
+        state.fresh = Math.min(job.targetLevel, cfg.freshCapacity);
+        if (!job.completedLogged) {
+          job.completedLogged = true;
+          const t = state.timeMin;
+          state.timeMin = Math.min(endMin, job.end);
+          log(`신유 보충 완료: ${state.fresh.toFixed(1)}L 도달`, "info");
+          state.timeMin = t;
+        }
+        state.freshFillJob = null;
+        if (state.fresh + EPS < getFreshTargetLevel()) createFreshFillJob(true);
+      }
+    }
+
+    function fillRefined() {
+      const before = state.refined;
+      state.refined = Math.min(cfg.refinedCapacity, state.refined + cfg.refinedFillAmount);
+      const added = state.refined - before;
+      if (added > EPS) {
+        const capped = added + EPS < cfg.refinedFillAmount ? " (용량 제한 적용)" : "";
+        log(`정제유 충전: +${added.toFixed(1)}L → ${state.refined.toFixed(1)}L${capped}`, "info");
+      } else {
+        log(`정제유 충전 시도: 보관함이 가득 차 있어 충전되지 않음`, "warn");
+      }
+    }
+
+    function scheduleNextRefinedFillAfterEvent() {
+      const pct = getGrowthPercentForCount(state.refinedGrowthCount);
+      state.lastAppliedGrowthPct = pct;
+      state.currentRefinedIntervalH = state.currentRefinedIntervalH * (1 + pct / 100);
+      state.refinedGrowthCount += 1;
+      state.nextRefinedFill = state.timeMin + state.currentRefinedIntervalH * 60;
+    }
+
+    function transferToMix() {
+      let refinedOut = 0;
+      let freshOut = 0;
+
+      if (cfg.transferMode === "fixed50") {
+        refinedOut = Math.min(state.refined, cfg.transferTotalL);
+        freshOut = Math.max(0, cfg.transferTotalL - refinedOut);
+        if (freshOut > state.fresh) {
+          log(`신유 부족: 필요 ${freshOut.toFixed(1)}L, 실제 ${state.fresh.toFixed(1)}L만 이송`, "warn");
+          freshOut = state.fresh;
+        }
+        state.refined -= refinedOut;
+        state.fresh -= freshOut;
+      } else {
+        refinedOut = state.refined;
+        state.refined = 0;
+        freshOut = Math.max(0, cfg.transferTotalL - refinedOut);
+        if (freshOut > state.fresh) {
+          log(`신유 부족: 필요 ${freshOut.toFixed(1)}L, 실제 ${state.fresh.toFixed(1)}L만 이송`, "warn");
+          freshOut = state.fresh;
+        }
+        state.fresh -= freshOut;
+      }
+
+      const total = refinedOut + freshOut;
+      if (total <= EPS) {
+        log(`혼합통 이송 시도: 이송할 유량이 없음`, "warn");
+        if (state.freshFillJob) rebalanceFreshFillJob();
+        else createFreshFillJob();
+        return;
+      }
+
+      state.mixBatches.push({
+        id: batchSeq++,
+        receivedAt: state.timeMin,
+        drainStart: state.timeMin + cfg.mixWaitH * 60,
+        drainEnd: state.timeMin + (cfg.mixWaitH + cfg.mixDrainH) * 60,
+        total,
+        remaining: total,
+        refined: refinedOut,
+        fresh: freshOut,
+        completedLogged: false
+      });
+
+      const mixLevel = getMixLevel();
+      if (mixLevel > cfg.mixCapacity + EPS) {
+        log(`혼합통 용량 초과: 현재 ${mixLevel.toFixed(1)}L / 용량 ${cfg.mixCapacity.toFixed(1)}L`, "danger");
+      }
+
+      if (cfg.transferMode === "fixed50") {
+        log(`혼합통 이송(총량 우선): 정제유 ${refinedOut.toFixed(1)}L + 신유 ${freshOut.toFixed(1)}L = ${total.toFixed(1)}L`, "info");
+      } else {
+        const extraNote = refinedOut > cfg.transferTotalL + EPS ? ` (정제유 전량 배출로 총량 ${total.toFixed(1)}L)` : "";
+        log(`혼합통 이송(정제유 전량): 정제유 ${refinedOut.toFixed(1)}L + 신유 ${freshOut.toFixed(1)}L = ${total.toFixed(1)}L${extraNote}`, refinedOut > cfg.transferTotalL + EPS ? "warn" : "info");
+      }
+
+      if (state.freshFillJob) rebalanceFreshFillJob();
+      else createFreshFillJob();
+    }
+
+    function drainBatchesBetween(startMin, endMin) {
+      if (endMin <= startMin) return;
+
+      for (const b of state.mixBatches) {
+        if (b.remaining <= EPS) continue;
+        const activeStart = Math.max(startMin, b.drainStart);
+        const activeEnd = Math.min(endMin, b.drainEnd);
+        if (activeEnd - activeStart > EPS) {
+          const rate = b.total / (cfg.mixDrainH * 60);
+          const amount = Math.min(b.remaining, rate * (activeEnd - activeStart));
+          b.remaining -= amount;
+          if (b.remaining < EPS) b.remaining = 0;
+        }
+      }
+
+      for (const b of state.mixBatches) {
+        if (!b.completedLogged && b.remaining <= EPS && endMin >= b.drainEnd - EPS) {
+          b.completedLogged = true;
+          const t = state.timeMin;
+          state.timeMin = b.drainEnd;
+          log(`혼합 배치 #${b.id} 배출 완료`, "info");
+          state.timeMin = t;
+        }
+      }
+
+      state.mixBatches = state.mixBatches.filter(b => b.remaining > EPS || endMin < b.drainEnd - EPS);
+    }
+
+    function processContinuousBetween(startMin, endMin) {
+      processFreshFillBetween(startMin, endMin);
+      drainBatchesBetween(startMin, endMin);
+    }
+
+    function getNextEventTime(cursor, end) {
+      let next = Infinity;
+      if (state.nextRefinedFill > cursor + EPS && state.nextRefinedFill <= end + EPS) next = Math.min(next, state.nextRefinedFill);
+      if (state.nextTransfer > cursor + EPS && state.nextTransfer <= end + EPS) next = Math.min(next, state.nextTransfer);
+      if (state.freshFillJob && state.freshFillJob.end > cursor + EPS && state.freshFillJob.end <= end + EPS) next = Math.min(next, state.freshFillJob.end);
+      return next;
+    }
+
+    function stepOneMinute() {
+      const start = state.timeMin;
+      const end = state.timeMin + 1;
+      let cursor = start;
+
+      while (true) {
+        const nextEvent = getNextEventTime(cursor, end);
+        if (!Number.isFinite(nextEvent)) break;
+
+        processContinuousBetween(cursor, nextEvent);
+        state.timeMin = nextEvent;
+
+        if (Math.abs(state.nextRefinedFill - nextEvent) < 1e-6) {
+          fillRefined();
+          scheduleNextRefinedFillAfterEvent();
+        }
+
+        if (Math.abs(state.nextTransfer - nextEvent) < 1e-6) {
+          transferToMix();
+          state.nextTransfer += cfg.transferCycleH * 60;
+        }
+
+        if (state.freshFillJob && Math.abs(state.freshFillJob.end - nextEvent) < 1e-6) {
+          processFreshFillBetween(nextEvent, nextEvent);
+        }
+
+        cursor = nextEvent;
+      }
+
+      processContinuousBetween(cursor, end);
+      state.timeMin = end;
+      if (Math.floor(state.timeMin) % 5 === 0) pushHistory();
+    }
+
+    function renderTank(liquidEl, valueEl, percentEl, capTxtEl, current, cap) {
+      const pct = cap > 0 ? (current / cap) * 100 : 0;
+      const visualPct = Math.max(0, Math.min(100, pct));
+      liquidEl.style.height = `${visualPct}%`;
+      liquidEl.textContent = `${current.toFixed(1)}L`;
+      valueEl.textContent = `${current.toFixed(1)} L`;
+      percentEl.textContent = `${pct.toFixed(1)}%`;
+      capTxtEl.textContent = `${cap.toFixed(1)} L`;
+      percentEl.style.color = pct > 100 ? "#fca5a5" : "";
+    }
+
+    function renderBatches() {
+      const list = $("batchList");
+      list.innerHTML = "";
+      if (!state.mixBatches.length) {
+        list.innerHTML = `<div class="batch">현재 활성 배치가 없습니다.</div>`;
+        return;
+      }
+
+      const now = state.timeMin;
+      for (const b of state.mixBatches) {
+        let badge = `<span class="badge idle">IDLE</span>`;
+        let desc = "상태 확인 불가";
+        if (now < b.drainStart) {
+          badge = `<span class="badge waiting">WAITING</span>`;
+          desc = `배출 시작까지 ${formatRemain(b.drainStart - now)}`;
+        } else if (now >= b.drainStart && now < b.drainEnd && b.remaining > EPS) {
+          badge = `<span class="badge draining">DRAINING</span>`;
+          desc = `배출 완료까지 ${formatRemain(b.drainEnd - now)}`;
+        } else if (b.remaining <= EPS) {
+          badge = `<span class="badge done">DONE</span>`;
+          desc = `배출 완료`;
+        }
+        const div = document.createElement("div");
+        div.className = "batch";
+        div.innerHTML = `
+          <b>배치 #${b.id}</b> ${badge}<br>
+          유입 시각: ${formatTime(b.receivedAt)}<br>
+          구성: 정제유 ${b.refined.toFixed(1)}L / 신유 ${b.fresh.toFixed(1)}L / 총 ${b.total.toFixed(1)}L<br>
+          잔량: ${b.remaining.toFixed(1)}L<br>
+          상태: ${desc}
+        `;
+        list.appendChild(div);
+      }
+    }
+
+    function renderLogs() {
+      const box = $("logBox");
+      box.innerHTML = "";
+      if (!state.logs.length) {
+        box.innerHTML = `<div class="log-item">로그가 없습니다.</div>`;
+        return;
+      }
+      state.logs.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "log-item";
+        const cls = item.type === "danger" ? "log-danger" : item.type === "warn" ? "log-warn" : "log-info";
+        div.innerHTML = `<span class="log-time">${formatTime(item.time)}</span><span class="${cls}">${item.message}</span>`;
+        box.appendChild(div);
+      });
+    }
+
+    function drawTrend() {
+      const scroll = $("trendScroll");
+      const canvas = $("trendCanvas");
+      const ctx = canvas.getContext("2d");
+      const baseWidth = Math.max(scroll.clientWidth - 2, 900);
+      const totalMinutes = state.history.length >= 2 ? (state.history[state.history.length - 1].t - state.history[0].t) : 0;
+      const dynamicWidth = Math.max(
+        baseWidth,
+        Math.ceil(baseWidth * (Math.max(totalMinutes, TREND_VISIBLE_WINDOW_MIN) / TREND_VISIBLE_WINDOW_MIN))
+      );
+      const height = 300;
+      const nearRight = (scroll.scrollLeft + scroll.clientWidth) >= (scroll.scrollWidth - 30);
+
+      canvas.width = dynamicWidth;
+      canvas.height = height;
+      canvas.style.width = dynamicWidth + "px";
+      canvas.style.height = height + "px";
+
+      const W = canvas.width;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#09111d";
+      ctx.fillRect(0, 0, W, H);
+
+      const pad = { left: 58, right: 24, top: 18, bottom: 34 };
+      const chartW = W - pad.left - pad.right;
+      const chartH = H - pad.top - pad.bottom;
+
+      const maxHistory = state.history.length ? Math.max(...state.history.map(d => Math.max(d.refined, d.fresh, d.mix))) : 0;
+      const rawMax = Math.max(cfg.refinedCapacity, cfg.freshCapacity, cfg.mixCapacity, cfg.transferTotalL, maxHistory, 10);
+      const maxY = ceilTo10(rawMax * 1.05);
+
+      ctx.strokeStyle = "rgba(148,163,184,.15)";
+      ctx.lineWidth = 1;
+      for (let yVal = 0; yVal <= maxY; yVal += 10) {
+        const y = pad.top + chartH - (yVal / maxY) * chartH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px sans-serif";
+      for (let yVal = 0; yVal <= maxY; yVal += 10) {
+        const y = pad.top + chartH - (yVal / maxY) * chartH + 4;
+        ctx.fillText(String(yVal), 12, y);
+      }
+
+      if (state.history.length >= 2) {
+        const minT = state.history[0].t;
+        const maxT = Math.max(minT + 1, state.history[state.history.length - 1].t);
+        const xScale = (t) => pad.left + ((t - minT) / (maxT - minT)) * chartW;
+        const yScale = (v) => pad.top + chartH - (v / maxY) * chartH;
+
+        function drawLine(key, color) {
+          ctx.beginPath();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2.5;
+          state.history.forEach((d, i) => {
+            const x = xScale(d.t);
+            const y = yScale(d[key]);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        }
+
+        drawLine("refined", "#f59e0b");
+        drawLine("fresh", "#38bdf8");
+        drawLine("mix", "#a78bfa");
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "11px sans-serif";
+        const marks = Math.max(5, Math.floor(chartW / 220));
+        for (let i = 0; i <= marks; i++) {
+          const t = minT + ((maxT - minT) / marks) * i;
+          const x = xScale(t);
+          const label = formatTime(t).replace("D+", "D");
+          ctx.fillText(label, x - 28, H - 10);
+        }
+      }
+
+      if (nearRight) {
+        requestAnimationFrame(() => {
+          scroll.scrollLeft = scroll.scrollWidth;
+        });
+      }
+    }
+
+    function downloadCsv() {
+      if (!state.history.length) {
+        alert("다운로드할 그래프 데이터가 없습니다.");
+        return;
+      }
+      const rows = ["time_min,display_time,refined_l,fresh_l,mix_l"];
+      for (const row of state.history) {
+        rows.push([
+          row.t,
+          `"${formatTime(row.t)}"`,
+          row.refined.toFixed(3),
+          row.fresh.toFixed(3),
+          row.mix.toFixed(3)
+        ].join(","));
+      }
+      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `process_trend_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function render() {
+      const mixLevel = getMixLevel();
+      const mixStage = getMixStage();
+      const freshFillStage = getFreshFillStage();
+      const nextGrowthPct = getGrowthPercentForCount(state.refinedGrowthCount);
+
+      $("timeNow").textContent = formatTime(state.timeMin);
+      $("mixStage").textContent = mixStage.stage;
+      $("mixStageDetail").textContent = mixStage.detail;
+      $("freshFillStage").textContent = freshFillStage.stage;
+      $("freshFillDetail").textContent = freshFillStage.detail;
+      $("lastEvent").textContent = state.lastEvent || "-";
+      $("activeBatchCount").textContent = String(state.mixBatches.length);
+
+      renderTank($("refinedLiquid"), $("refinedValue"), $("refinedPercent"), $("refinedCapTxt"), state.refined, cfg.refinedCapacity);
+      renderTank($("freshLiquid"), $("freshValue"), $("freshPercent"), $("freshCapTxt"), state.fresh, cfg.freshCapacity);
+      renderTank($("mixLiquid"), $("mixValue"), $("mixPercent"), $("mixCapTxt"), mixLevel, cfg.mixCapacity);
+
+      $("freshTargetTxt").textContent = `${getFreshTargetLevel().toFixed(1)} L`;
+      $("nextRefinedFillTxt").textContent = formatTime(state.nextRefinedFill);
+      $("nextTransferTxt").textContent = formatTime(state.nextTransfer);
+      $("refinedCycleNowTxt").textContent = formatHours(state.currentRefinedIntervalH || cfg.refinedFillCycleH);
+      $("refinedNextGrowthTxt").textContent = `${nextGrowthPct.toFixed(2)}% (카운트 ${state.refinedGrowthCount})`;
+      $("freshFillStatusTxt").textContent = state.freshFillJob ? `보충 중 / 종료 ${formatTime(state.freshFillJob.end)}` : "대기";
+
+      renderLogs();
+      renderBatches();
+      renderGrowthRuleTable();
+      drawGrowthPreview();
+      drawTrend();
+    }
+
+    function pauseSimulation() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+
+    function startSimulation() {
+      pauseSimulation();
+      cfg.speedStep = Math.max(1, parseInt($("speedStep").value, 10) || cfg.speedStep || 5);
+      timer = setInterval(() => {
+        for (let i = 0; i < cfg.speedStep; i++) stepOneMinute();
+        render();
+      }, 200);
+    }
+
+    function resetSimulation() {
+      pauseSimulation();
+      cfg = readConfig();
+      $("refinedGrowthRules").value = cfg.refinedGrowthRulesText;
+
+      const initRefined = clamp(cfg.initRefinedL, 0, cfg.refinedCapacity);
+      const initFresh = clamp(cfg.initFreshL, 0, cfg.freshCapacity);
+      const initMix = Math.max(0, cfg.initMixL);
+
+      state = {
+        timeMin: 0,
+        refined: initRefined,
+        fresh: initFresh,
+        mixBatches: [],
+        freshFillJob: null,
+        refinedGrowthCount: 0,
+        currentRefinedIntervalH: cfg.refinedFillCycleH,
+        lastAppliedGrowthPct: 0,
+        logs: [],
+        history: [],
+        nextRefinedFill: cfg.refinedFillCycleH * 60,
+        nextTransfer: cfg.transferCycleH * 60,
+        lastEvent: "초기화 완료"
+      };
+
+      if (initMix > EPS) {
+        state.mixBatches.push({
+          id: batchSeq++,
+          receivedAt: 0,
+          drainStart: cfg.mixWaitH * 60,
+          drainEnd: (cfg.mixWaitH + cfg.mixDrainH) * 60,
+          total: initMix,
+          remaining: initMix,
+          refined: 0,
+          fresh: initMix,
+          completedLogged: false
+        });
+      }
+
+      if (state.fresh + EPS < getFreshTargetLevel()) createFreshFillJob(true);
+      pushHistory();
+      log("시뮬레이션이 초기화되었습니다.", "info");
+      render();
+    }
+
+    $("applyBtn").addEventListener("click", resetSimulation);
+    $("resetBtn").addEventListener("click", resetSimulation);
+    $("startBtn").addEventListener("click", () => {
+      cfg = readConfig();
+      startSimulation();
+    });
+    $("pauseBtn").addEventListener("click", pauseSimulation);
+    $("downloadCsvBtn").addEventListener("click", downloadCsv);
+    window.addEventListener("resize", () => render());
+
+    resetSimulation();
+  </script>
+</body>
+</html>
